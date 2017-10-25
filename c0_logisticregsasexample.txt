@@ -1,0 +1,1232 @@
+Logistic Regression Using SAS
+
+For this handout we will examine a dataset that is part of the data collected from “A study of preventive lifestyles and women’s health”  conducted by a group of students in  School of Public Health, at the University of Michigan during the1997 winter term. There are 370 women in this study aged 40 to 91 years.
+
+Description of variables:
+
+Variable Name		Description				Column Location
+
+	IDNUM		Identification number			            1-4
+     STOPMENS  	1= Yes, 2= NO, 9= Missing	                        5
+	AGESTOP1	88=NA (haven't stopped) 99= Missing	6-7
+	NUMPREG1	88=NA (no births) 99= Missing		8-9
+	AGEBIRTH	88=NA (no births) 99= Missing		10-11
+	MAMFREQ4	1= Every 6 months			            12
+			2= Every year
+			3= Every 2 years
+			4= Every 5 years 
+			5= Never          
+			6= Other
+				9= Missing
+	DOB		01/01/00 to 12/31/57			          13-20
+			99/99/99= Missing
+	EDUC           	1=  No formal school 			          21-22
+			2= Grade school
+			3= Some high school 
+			4= High school graduate/ Diploma equivalent
+			5= Some college education/ Associate’s degree 
+			6= College graduate   
+			7= Some graduate school 
+			8= Graduate school or professional degree
+			9= Other 
+			99= Missing
+ 	TOTINCOM	1= Less than $10,000			         23
+			2= $10.000 to 24,999
+			3= $25,000 to 39,999
+			4= $40.000 to 54,999
+			5= More than $55,000
+			8= Don’t know       
+ 			9= Missing
+
+ 	SMOKER		1= Yes, 2= No, 9= Missing		     24
+	WEIGHT1		999= Missing				     25-27
+
+
+
+The yearcutoff option is used, which defines the 100-year window SAS will use for a two-digit year. We set yearcutoff=1900 so that a date of birth of 12/21/05 will be read as Dec 21, 1905, rather than as Dec 21, 2005 (the default yearcutoff for SAS 9.2 is 1920).
+
+options yearcutoff=1900;
+
+The data step commands read in the raw data and set up the missing value codes. We set up the missing value code for DOB to be 09/09/99, using a SAS date constant ("09SEP99"D). We also create some new variables: MENOPAUSE (a 0,1 dummy variable), YEARBIRTH, AGE (age in years), EDCAT (a 3-level categorical variable), AGECAT (a 4-level categorical variable), OVER50 (a 0, 1 dummy variable), and HIGHAGE (a categorical variable with values 1 and 2). 
+
+data bcancer;
+ infile "brca.dat" lrecl=300;
+ input idnum 1-4 stopmens 5 agestop1 6-7 numpreg1 8-9 agebirth 10-11
+       mamfreq4 12 @13 dob mmddyy8. educ 21-22
+	   totincom 23 smoker 24 weight1 25-27;
+ format dob mmddyy10.;
+ 
+ if dob = "09SEP99"D then dob=.;
+ if stopmens=9 then stopmens=.;
+ if agestop1 = 88 or agestop1=99 then agestop1=.;
+ if agebirth =99 then agebirth=.;
+ if numpreg1=99 then numpreg1=.;
+ if mamfreq4=9 then mamfreq4=.;
+ if educ=99 then educ=.;
+ if totincom=8 or totincom=9 then totincom=.;
+ if smoker=9 then smoker=.;
+ if weight1=999 then weight1=.;
+
+ if stopmens = 1 then menopause=1;
+ if stopmens = 2 then menopause=0;
+
+ yearbirth = year(dob);
+ age = int(("01JAN1997"d - dob)/365.25);
+
+ if educ not=. then do;
+   if educ in (1,2,3,4) then edcat = 1;
+   if educ in (5,6)     then edcat = 2;
+   if educ in (7,8)     then edcat = 3;
+   highed = (educ in (6,7,8));
+ end;
+
+ if age not=. then do;
+   if age <50 then agecat=1;
+   if age >=50 and age < 60 then agecat=2;
+   if age >=60 and age < 70 then agecat=3;
+   if age >=70 then agecat=4;
+
+   if age < 50 then over50 = 0;
+   if age >=50 then over50 = 1;
+
+   if age >= 50 then highage = 1;
+   if age <  50 then highage = 2;
+ end;
+run;
+Descriptives and Frequencies
+We first get descriptive statistics for all the numerical variables in the dataset. We request specific statistics, including nmiss, to stress the number of missing values for each variable.
+
+title "Descriptive Statistics";
+proc means data=bcancer n nmiss min max mean std;
+run;
+                                      Descriptive Statistics   
+                                      The MEANS Procedure
+                          N
+   Variable       N    Miss         Minimum         Maximum            Mean         Std Dev
+   ----------------------------------------------------------------------------------------
+   idnum        370       0         1008.00         2448.00         1761.69     412.7290352
+   stopmens     369       1       1.0000000       2.0000000       1.1598916       0.3670031
+   agestop1     297      73      27.0000000      61.0000000      47.1818182       6.3101650
+   numpreg1     366       4               0      12.0000000       2.9480874       1.8726683
+   agebirth     359      11       9.0000000      88.0000000      30.2228412      19.5615468
+   mamfreq4     328      42       1.0000000       6.0000000       2.9420732       1.3812853
+   dob          361       9       -19734.00        -1248.00        -7899.50         4007.12
+   educ         365       5       1.0000000       9.0000000       5.6410959       1.6374595
+   totincom     325      45       1.0000000       5.0000000       3.8276923       1.3080364
+   smoker       364       6       1.0000000       2.0000000       1.4862637       0.5004993
+   weight1      360      10      86.0000000     295.0000000     148.3527778      31.1093049
+   menopause    369       1               0       1.0000000       0.8401084       0.3670031
+   yearbirth    361       9         1905.00         1956.00         1937.86      10.9836177
+   age          361       9      40.0000000      91.0000000      58.1440443      10.9899588
+   edcat        364       6       1.0000000       3.0000000       2.0137363       0.7694786
+   highed       365       5               0       1.0000000       0.4383562       0.4968666
+   agecat       361       9       1.0000000       4.0000000       2.3296399       1.0798313
+   over50       361       9               0       1.0000000       0.7257618       0.4467488
+   highage      361       9       1.0000000       2.0000000       1.2742382       0.4467488
+   ----------------------------------------------------------------------------------------
+
+Next, we examine oneway frequencies for selected variables. Note that these could all have been requested in a single tables statement. We will carefully check the Frequency Missing for each variable.
+
+title "Oneway Frequencies";
+proc freq data=bcancer;
+  tables dob stopmens menopause educ edcat age agecat over50 highage;
+run;
+
+                                      The FREQ Procedure
+                                                       Cumulative    Cumulative
+                       dob    Frequency     Percent     Frequency      Percent
+                ---------------------------------------------------------------
+                12/21/1905           1        0.28             1         0.28
+                09/11/1909           1        0.28             2         0.55
+                12/04/1909           1        0.28             3         0.83
+                07/15/1911           1        0.28             4         1.11
+                04/01/1913           1        0.28             5         1.39
+                07/28/1913           1        0.28             6         1.66
+                .... 
+                11/18/1955           1        0.28           358        99.17
+                11/22/1955           1        0.28           359        99.45
+                02/24/1956           1        0.28           360        99.72
+                08/01/1956           1        0.28           361       100.00
+     
+                                Frequency Missing = 9
+
+
+                                                      Cumulative    Cumulative
+                 stopmens    Frequency     Percent     Frequency      Percent
+                 -------------------------------------------------------------
+                        1         310       84.01           310        84.01
+                        2          59       15.99           369       100.00
+
+                                     Frequency Missing = 1
+
+
+                                                      Cumulative    Cumulative
+                menopause    Frequency     Percent     Frequency      Percent
+                --------------------------------------------------------------
+                        0          59       15.99            59        15.99
+                        1         310       84.01           369       100.00
+
+                                     Frequency Missing = 1
+
+                                                    Cumulative    Cumulative
+                   educ    Frequency     Percent     Frequency      Percent
+                   ---------------------------------------------------------
+                      1           1        0.27             1         0.27
+                      2           4        1.10             5         1.37
+                      3          11        3.01            16         4.38
+                      4          89       24.38           105        28.77
+                      5          99       27.12           204        55.89
+                      6          50       13.70           254        69.59
+                      7          23        6.30           277        75.89
+                      8          87       23.84           364        99.73
+                      9           1        0.27           365       100.00
+
+                                     Frequency Missing = 5
+
+                                                    Cumulative    Cumulative
+                  edcat    Frequency     Percent     Frequency      Percent
+                  ----------------------------------------------------------
+                      1         105       28.85           105        28.85
+                      2         149       40.93           254        69.78
+                      3         110       30.22           364       100.00
+
+                                     Frequency Missing = 6
+
+                                                   Cumulative    Cumulative
+                   age    Frequency     Percent     Frequency      Percent
+                   --------------------------------------------------------
+                    40           2        0.55             2         0.55
+                    41           5        1.39             7         1.94
+                    42           7        1.94            14         3.88
+                    43          11        3.05            25         6.93
+                    44           7        1.94            32         8.86
+                    45          11        3.05            43        11.91
+                    46          10        2.77            53        14.68
+                    47          16        4.43            69        19.11
+                    48          13        3.60            82        22.71
+                    49          17        4.71            99        27.42
+                    50          12        3.32           111        30.75
+                    51           9        2.49           120        33.24
+                    52          14        3.88           134        37.12
+                    53          13        3.60           147        40.72
+                    54          13        3.60           160        44.32
+                    55          10        2.77           170        47.09
+                    56           9        2.49           179        49.58
+                    57          10        2.77           189        52.35
+                    58          11        3.05           200        55.40
+                    59          14        3.88           214        59.28
+                    60          10        2.77           224        62.05
+                    61           8        2.22           232        64.27
+                    62          11        3.05           243        67.31
+                    63           5        1.39           248        68.70
+                    64           4        1.11           252        69.81
+                    65           8        2.22           260        72.02
+                    66           8        2.22           268        74.24
+                    67           8        2.22           276        76.45
+                    68           7        1.94           283        78.39
+                    69           7        1.94           290        80.33
+                    70           9        2.49           299        82.83
+                    71          10        2.77           309        85.60
+                    72          13        3.60           322        89.20
+                    73           5        1.39           327        90.58
+                    74           4        1.11           331        91.69
+                    75           5        1.39           336        93.07
+                    76           4        1.11           340        94.18
+                    77           5        1.39           345        95.57
+                    78           2        0.55           347        96.12
+                    79           2        0.55           349        96.68
+                    80           2        0.55           351        97.23
+                    81           3        0.83           354        98.06
+                    82           1        0.28           355        98.34
+                    83           2        0.55           357        98.89
+                    85           1        0.28           358        99.17
+                    87           2        0.55           360        99.72
+                    91           1        0.28           361       100.00
+
+                                     Frequency Missing = 9
+
+                                                    Cumulative    Cumulative
+                  agecat    Frequency     Percent     Frequency      Percent
+                  -----------------------------------------------------------
+                       1          99       27.42            99        27.42
+                       2         115       31.86           214        59.28
+                       3          76       21.05           290        80.33
+                       4          71       19.67           361       100.00
+                                     Frequency Missing = 9
+
+                                                     Cumulative    Cumulative
+                  over50    Frequency     Percent     Frequency      Percent
+                  -----------------------------------------------------------
+                       0          99       27.42            99        27.42
+                       1         262       72.58           361       100.00
+
+                                     Frequency Missing = 9
+
+                                                     Cumulative    Cumulative
+                 highage    Frequency     Percent     Frequency      Percent
+                 ------------------------------------------------------------
+                       1         262       72.58           262        72.58
+                       2          99       27.42           361       100.00
+
+                                     Frequency Missing = 9
+
+Crosstabulation
+
+Prior to fitting a logistic regression model, we check a crosstabulation to understand the relationship between menopause and high age. In this 2 by 2 table both the predictor variable, HIGHAGE, and the outcome variable, STOPMENS, are coded as 1 and 2. For HIGHAGE, the value 1 represents the high risk group (those whose age is greater than or equal to 50 years), and for STOPMENS, the value 1 represents the outcome of interest (those who are in menopause). Notice also that HIGHAGE is considered to be the risk factor so it is listed first (the row variable) in the tables statement and STOPMENS is the outcome of interest so it is listed second (the column variable).
+
+We request the relative risk and the odds ratio. 
+
+/*Crosstabs of HIGHAGE by STOPMENS*/
+title "2 x 2 Table";
+title2 "HIGHAGE Coded as 1, 2";
+proc freq data=bcancer;
+  tables highage*stopmens / relrisk chisq;
+run;
+                                          2 x 2 Table                                       
+                                     HIGHAGE Coded as 1, 2
+
+                                      The FREQ Procedure
+                                 Table of highage by stopmens
+
+                              highage     stopmens
+                              Frequency|
+                              Percent  |
+                              Row Pct  |
+                              Col Pct  |       1|       2|  Total
+                              ---------+--------+--------+
+                                     1 |    251 |     10 |    261
+                                       |  69.72 |   2.78 |  72.50
+                                       |  96.17 |   3.83 |
+                                       |  83.39 |  16.95 |
+                              ---------+--------+--------+
+                                     2 |     50 |     49 |     99
+                                       |  13.89 |  13.61 |  27.50
+                                       |  50.51 |  49.49 |
+                                       |  16.61 |  83.05 |
+                              ---------+--------+--------+
+                              Total         301       59      360
+                                          83.61    16.39   100.00
+
+                                    Frequency Missing = 10
+
+                          Statistics for Table of highage by stopmens
+                    Statistic                     DF       Value      Prob
+                    ------------------------------------------------------
+                    Chi-Square                     1    109.2191    <.0001
+                    Likelihood Ratio Chi-Square    1     99.0815    <.0001
+                    Continuity Adj. Chi-Square     1    105.9122    <.0001
+                    Mantel-Haenszel Chi-Square     1    108.9157    <.0001
+                    Phi Coefficient                       0.5508
+                    Contingency Coefficient               0.4825
+                    Cramer's V                            0.5508
+
+                
+ 
+                                     Fisher's Exact Test
+                              ----------------------------------
+                              Cell (1,1) Frequency (F)       251
+                              Left-sided Pr <= F          1.0000
+                              Right-sided Pr >= F      5.719E-23
+
+                              Table Probability (P)    1.204E-21
+                              Two-sided Pr <= P        5.719E-23
+
+The output below says "Estimates of the Relative Risk (Row1/Row2)". This is what we want:  the risk of menopause for those who are high age (ROW1) divided by the risk of menopause for those who are not high age (ROW2). To get the relative risk, we read the Cohort (Col 1 Risk) because we are interested in the relative risk for being in menopause (Column 1 of STOPMENS). Notice that the odds ratio (24.6) is not a good estimate of the risk ratio (1.90), because the outcome is not rare in this group of older women.
+  
+                        Estimates of the Relative Risk (Row1/Row2)
+               
+               Type of Study                   Value       95% Confidence Limits
+               -----------------------------------------------------------------
+               Case-Control (Odds Ratio)     24.5980       11.6802       51.8021
+               Cohort (Col1 Risk)             1.9041        1.5644        2.3176
+               Cohort (Col2 Risk)             0.0774        0.0408        0.1467
+
+                                  Effective Sample Size = 360
+                                    Frequency Missing = 10
+
+Logistic Regression Model with a dummy variable predictor
+
+We now fit a logistic regression model, but using two different variables: OVER50 (coded as 0, 1) is used as the predictor, and MENOPAUSE (also coded as 0,1) is used as the outcome. We use the descending option so SAS will fit the probability of being a 1, rather than of being a zero. 
+
+proc logistic data=bcancer descending;
+  model menopause =  over50/ rsquare;
+run;
+
+Alternatively, the same model can be fitted by specifying the level of menopause that is to be considered the "event", as shown below:
+
+proc logistic data=bcancer;
+  model menopause(event="1") =  over50/ rsquare;
+run;
+
+You can check that the correct probability is being modeled by looking at the portion of the output that lists it. In this case, SAS reports  "Probability modeled is menopause=1." so we know the model is set up correctly. We use the predictor variable in this model as OVER50, which is a binary dummy variable coded as 0, 1. Just as in a linear regression model, we can use a dummy variable as a predictor in a logistic regression model. 
+
+The value of the parameter estimate for OVER50 (3.2) tells us that the log-odds of being in menopause increase (because the estimate is positive) by 3.2 units for those in menopause compared to those women who are not. This result is significant, Wald chi-square (1 df) = 71.04, p< 0.0001. The odds ratio (24.6) is easier to interpret. It tells us that the odds of being in menopause are 24.6 times higher for a woman who is over 50 than for someone who is not. We can see that the 95% CI for the odds ratio does not include 1, so we can be pretty confident that there is a strong relationship between being over 50 and being in menopause. 
+                       Logistic Regression with Dummy Variable Predictor                    
+                                     Over50 Coded as 0, 1
+                                    The LOGISTIC Procedure
+
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         360
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+                                    1            1            301
+                                    2            0             59
+
+                              Probability modeled is menopause=1.
+NOTE: 10 observations were deleted due to missing values for the response or explanatory
+      variables.
+                                   Model Convergence Status
+                        Convergence criterion (GCONV=1E-8) satisfied.
+
+                                     Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             323.165        226.084
+                            SC              327.051        233.856
+                            -2 Log L        321.165        222.084
+                     R-Square    0.2406    Max-rescaled R-Square    0.4076
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio        99.0815        1         <.0001
+                    Score                  109.2191        1         <.0001
+                    Wald                    71.0363        1         <.0001
+
+
+                           Analysis of Maximum Likelihood Estimates
+                                             Standard          Wald
+              Parameter    DF    Estimate       Error    Chi-Square    Pr > ChiSq
+              Intercept     1      0.0202      0.2010        0.0101        0.9199
+              over50        1      3.2026      0.3800       71.0363        <.0001
+
+                                     Odds Ratio Estimates
+                                       Point          95% Wald
+                          Effect    Estimate      Confidence Limits
+                          over50      24.596      11.680      51.798
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     69.3    Somers' D    0.664
+                       Percent Discordant      2.8    Gamma        0.922
+                       Percent Tied           27.9    Tau-a        0.183
+                       Pairs                 17759    c            0.832
+
+
+Logistic Regression Model with a class variable as predictor
+
+We now fit the same model, but using a class variable, HIGHAGE (coded as 1=Highage and 2=Not Highage), as the predictor. In this case, we want to use a class statement, because this predictor is not a dummy (0,1) variable as in the previous example. Note that in the class statement, we specify the reference level for HIGHAGE (ref="2"), and we also use the option param=ref after a forward slash. So, we will be fitting a model in which we are comparing the odds of being in menopause for those women who are over 50 (HIGHAGE=1) to those who are not over 50 (HIGHAGE=2, the reference category). 
+
+Note that the results of this model fit are the same as in the previous model, but with some minor modifications.  
+
+proc logistic data=bcancer;
+  class highage(ref="2") / param=ref;
+  model menopause(event="1") =  highage/ rsquare;
+run;
+
+                          Logistic Regression with a Class Statement                        
+                                   Highage used as Predictor
+                         Reference Category is Not-Highage (HighAge=2)
+
+                                    The LOGISTIC Procedure
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         360
+
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+
+                                    1            1            301
+                                    2            0             59
+
+                              Probability modeled is menopause=1.
+NOTE: 10 observations were deleted due to missing values for the response or explanatory
+      variables.
+
+Check the Class Level Information to be sure SAS has set up the coding for HIGHAGE correctly. We see that the Design Variables are set up so that HIGHAGE=1 is coded as 1, and HIGHAGE=2 is coded as 0, as we intended.
+
+                                    Class Level Information
+                                                       Design
+                                Class       Value     Variables
+                                highage     1                 1
+                                            2                 0
+    
+
+ 
+
+
+
+                                    Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             323.165        226.084
+                            SC              327.051        233.856
+                            -2 Log L        321.165        222.084
+
+                     R-Square    0.2406    Max-rescaled R-Square    0.4076
+
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio        99.0815        1         <.0001
+                    Score                  109.2191        1         <.0001
+                    Wald                    71.0363        1         <.0001
+
+
+                                  Type 3 Analysis of Effects
+                                                   Wald
+                          Effect       DF    Chi-Square    Pr > ChiSq
+                          highage       1       71.0363        <.0001
+
+The output for the parameter estimate is slightly different than for the previous model. In this case, we see highage  1, to emphasize that this is for HIGHAGE=1 compared to the reference category (HIGHAGE=2).
+
+                           Analysis of Maximum Likelihood Estimates
+                                             Standard          Wald
+             Parameter      DF    Estimate       Error    Chi-Square    Pr > ChiSq
+             Intercept       1      0.0202      0.2010        0.0101        0.9199
+             highage   1     1      3.2026      0.3800       71.0363        <.0001
+
+The output for the odds ratio also emphasizes that we are looking at the odds ratio for HIGHAGE=1 vs. 2.
+
+                                     Odds Ratio Estimates
+                                           Point          95% Wald
+                      Effect            Estimate      Confidence Limits
+                      highage 1 vs 2      24.596      11.680      51.798
+
+
+
+Logistic Regression Model with a class predictor with more than two categories
+
+We now look at the relationship of education categories to menopause. Again, we begin by checking the cross-tabulation between education and menopause, using the variable EDCAT as the "exposure" and STOPMENS as the "outcome" or event. Because we are interested in the probability of STOPMENS = 1, for each level of EDCAT, we really need only the row percents, so we suppress the display of column and total percent by using the nocol nopercent options. We see in the output that the proportion of women in menopause decreases with increasing education level.
+ 
+title "Relationship of Education Categories to Menopause";
+proc freq data=bcancer;
+  tables edcat*stopmens / chisq nocol nopercent;
+run;
+ 
+
+                               Table of edcat by stopmens
+
+                              edcat     stopmens
+                              Frequency|
+                              Row Pct  |       1|       2|  Total
+                              ---------+--------+--------+
+                                     1 |     96 |      9 |    105
+                                       |  91.43 |   8.57 |
+                              ---------+--------+--------+
+                                     2 |    125 |     23 |    148
+                                       |  84.46 |  15.54 |
+                              ---------+--------+--------+
+                                     3 |     84 |     26 |    110
+                                       |  76.36 |  23.64 |
+                              ---------+--------+--------+
+                              Total         305       58      363
+
+                                     Frequency Missing = 7
+
+                           Statistics for Table of edcat by stopmens
+
+                    Statistic                     DF       Value      Prob
+                    ------------------------------------------------------
+                    Chi-Square                     2      9.1172    0.0105
+                    Likelihood Ratio Chi-Square    2      9.3370    0.0094
+                    Mantel-Haenszel Chi-Square     1      9.0715    0.0026
+                    Phi Coefficient                       0.1585
+                    Contingency Coefficient               0.1565
+                    Cramer's V                            0.1585
+
+We now fit a logistic regression model, using EDCAT as a predictor, by including it in the class statement. The reference category is EDCAT=1.
+
+proc logistic data=bcancer;
+  class edcat(ref="1") / param = ref;
+  model menopause(event="1") =  edcat/ rsquare;
+run;
+
+
+                    Logistic Regression to Predict Menopause From Education                
+                                    The LOGISTIC Procedure
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         363
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+                                    1            1            305
+                                    2            0             58
+
+                              Probability modeled is menopause=1.
+NOTE: 7 observations were deleted due to missing values for the response or explanatory
+      variables.
+  
+We can look at the class level information below to see that EDCAT=1 is the reference category, because it has a value of 0 for all of the design variables.
+
+                                  Class Level Information
+                                                      Design
+                                 Class     Value     Variables
+                                 edcat     1          0      0
+                                           2          1      0
+                                           3          0      1
+
+                                   Model Convergence Status
+                        Convergence criterion (GCONV=1E-8) satisfied.
+
+                                     Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             320.935        315.598
+                            SC              324.829        327.281
+                            -2 Log L        318.935        309.598
+                    
+                      R-Square    0.0254    Max-rescaled R-Square    0.0434
+
+The portion of the output on Testing the Global Null Hypothesis provides an overall test for all parameters in the model. Thus, we can see that there is a likelihood ratio chi-square test of whether there is any effect of EDCAT, ?2 (2df) = 9.337, p=.0094. The Wald chi-square test is slightly smaller ?2 (2df) = 8.63, p=.0134, but gives similar results. 
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio         9.3370        2         0.0094
+                    Score                    9.1172        2         0.0105
+                    Wald                     8.6314        2         0.0134
+
+                                  Type 3 Analysis of Effects
+                                                  Wald
+                          Effect      DF    Chi-Square    Pr > ChiSq
+                          edcat        2        8.6314        0.0134
+
+The parmeter estimate for EDCAT 2 shows that the log-odds of menopause for someone with EDCAT=2 are smaller than for someone with EDCAT=1, but this difference is not significant (p=0.1050). The parameter estimate for EDCAT 3 are negative, indicating that someone with EDCAT=3 has a lower log-odds of menopause than a person with EDCAT=1, and this difference is significant (p=0.004) . 
+
+
+                           Analysis of Maximum Likelihood Estimates
+                                              Standard          Wald
+             Parameter      DF    Estimate       Error    Chi-Square    Pr > ChiSq
+             Intercept       1      2.3671      0.3486       46.1069        <.0001
+             edcat     2     1     -0.6743      0.4159        2.6279        0.1050
+             edcat     3     1     -1.1944      0.4146        8.2990        0.0040
+
+
+
+The odds ratio estimate for EDCAT 3 vs 1 is .303, indicating that the odds of being in menopause for a person with EDCAT=3 are only 30% of the odds of being in menopause for a person with EDCAT=1. 
+ 
+                                     Odds Ratio Estimates
+                                          Point          95% Wald
+                       Effect          Estimate      Confidence Limits
+                       edcat 2 vs 1       0.510       0.225       1.151
+                       edcat 3 vs 1       0.303       0.134       0.683
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     45.0    Somers' D    0.234
+                       Percent Discordant     21.6    Gamma        0.352
+                       Percent Tied           33.5    Tau-a        0.063
+                       Pairs                 17690    c            0.617
+
+
+Logistic Regression Model with a continuous predictor
+
+We now look at a logistic regression model, but this time with a single continuous predictor (AGE). We also request ods graphics to obtain a plot showing the relationship between AGE and the estimated probability of being in menopause. The units statement allows us to see the effect of a 1-year, 5-year, and 10-year increase in age on the odds of being in menopause. 
+
+The parameter estimate for AGE is positive (0.2829) telling us that the log-odds of being in menopause increase by .28 units for a woman who is one year older compared to her counterpart who is one year younger. The odds ratio (1.33) tells us that the odds of being in menopause for a woman who is one year older are 1.33 times greater. The last part of the output shows us the odds ratio for a one-year, five-year and 10-year increase in age. We estimate that the odds of being in menopause for a woman who is five years older than her counterpart are 4.1 times greater, and for a 10-year increase in age, the odds of being in menopause are almost 17 times greater.
+
+ods graphics on;
+proc logistic data=bcancer plots=(effect);
+  model menopause(event="1") = age / rsquare;
+  units age = 1 5 10;
+run;
+ods graphics off;
+
+                        Logistic Regression with a Continuous Predictor                    
+                                    The LOGISTIC Procedure
+
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         360
+     
+                                  Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+                                    1            1            301
+                                    2            0             59
+                              Probability modeled is menopause=1.
+NOTE: 10 observations were deleted due to missing values for the response or explanatory
+      variables.
+
+                                  Model Convergence Status
+                        Convergence criterion (GCONV=1E-8) satisfied.
+
+                                     Model Fit Statistics
+                                                        Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             323.165        201.019
+                            SC              327.051        208.792
+                            -2 Log L        321.165        197.019
+
+                     R-Square    0.2917    Max-rescaled R-Square    0.4942
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio       124.1456        1         <.0001
+                    Score                   81.0669        1         <.0001
+                    Wald                    49.7646        1         <.0001
+
+
+                           Analysis of Maximum Likelihood Estimates
+                                             Standard          Wald
+              Parameter    DF    Estimate       Error    Chi-Square    Pr > ChiSq
+              Intercept     1    -12.8675      1.9360       44.1735        <.0001
+              age           1      0.2829      0.0401       49.7646        <.0001
+
+
+                                     Odds Ratio Estimates
+
+                                       Point          95% Wald
+                          Effect    Estimate      Confidence Limits
+                          age          1.327       1.227       1.436
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     89.3    Somers' D    0.806
+                       Percent Discordant      8.7    Gamma        0.822
+                       Percent Tied            2.0    Tau-a        0.222
+                       Pairs                 17759    c            0.903
+
+                                     Adjusted Odds Ratios
+                               Effect         Unit     Estimate
+                               age          1.0000        1.327
+                               age          5.0000        4.115
+                               age         10.0000       16.935
+
+
+ 
+
+
+
+Quasi-Complete Separation in a Logistic Regression Model 
+
+One fairly common occurrence in a logistic regression model is that the model fails to converge. This often happens when you have a categorical predictor that is too perfect, that is, there may be a category with no variability in the response (all subjects in one category of the predictor have the same response). This is called quasi-complete separation. When this happens, SAS will give a warning message in the output. These warnings should be taken seriously, and the model should be refitted, perhaps by combining some categories of the predictor. 
+
+Even if there is not quasi-complete separation, separation may be nearly complete, so the standard error for a parameter estimate can become very large. It is good practice to examine the parameter estimates and their standard errors carefully for any logistic regression output. 
+
+We now examine a situation where quasi-complete separation occurs, using the variable AGECAT as a predictor in a logistic regression. However, first we check the crosstabulation between AGECAT and STOPMENS, using Proc Freq. Notice that in the highest age category, all 71 women are in menopause (not surprisingly).
+
+title "Relationship of AGECAT to MENOPAUSE";
+proc freq data=bcancer;
+  tables agecat*stopmens/ chisq nocol nopercent;
+run;
+
+
+
+                              Relationship of AGECAT to MENOPAUSE                           
+                                      The FREQ Procedure
+                                  Table of agecat by stopmens
+                              agecat     stopmens
+                              Frequency|
+                              Row Pct  |       1|       2|  Total
+                              ---------+--------+--------+
+                                     1 |     50 |     49 |     99
+                                       |  50.51 |  49.49 |
+                              ---------+--------+--------+
+                                     2 |    106 |      9 |    115
+                                       |  92.17 |   7.83 |
+                              ---------+--------+--------+
+                                     3 |     74 |      1 |     75
+                                       |  98.67 |   1.33 |
+                              ---------+--------+--------+
+                                     4 |     71 |      0 |     71
+                                       | 100.00 |   0.00 |
+                              ---------+--------+--------+
+                              Total         301       59      360
+                                    Frequency Missing = 10
+
+
+                          Statistics for Table of agecat by stopmens
+                    Statistic                     DF       Value      Prob
+                    ------------------------------------------------------
+                    Chi-Square                     3    111.6605    <.0001
+                    Likelihood Ratio Chi-Square    3    110.1752    <.0001
+                    Mantel-Haenszel Chi-Square     1     78.6978    <.0001
+                    Phi Coefficient                       0.5569
+                    Contingency Coefficient               0.4866
+                    Cramer's V                            0.5569
+
+                                  Effective Sample Size = 360
+                                    Frequency Missing = 10
+
+We now fit the corresponding logistic regression model, using AGECAT in a class statement, with AGECAT=1 as the reference category. 
+
+proc logistic data=bcancer;
+  class agecat(ref="1") / param = ref;
+  model menopause(event="1") =  agecat/ rsquare; 
+run;
+
+                            Logistic Regression with AGECAT as Predictor                        
+                                  This Analysis Does not Work
+                     Check out the Parameter Estimates and Standard Errors
+                                    The LOGISTIC Procedure
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+                            Number of Observations Read         370
+                            Number of Observations Used         360
+
+
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+                                    1            1            301
+                                    2            0             59
+                              Probability modeled is menopause=1.
+
+NOTE: 10 observations were deleted due to missing values for the response or explanatory
+      variables.
+
+We check out the Class Level Information to see that the design variables are set up correctly to have AGECAT=1 as the reference category.
+
+                                    Class Level Information
+                             Class      Value     Design Variables
+                             agecat     1          0      0      0
+                                        2          1      0      0
+                                        3          0      1      0
+                                        4          0      0      1
+
+The notes in the output below alert us to the problem of quasi-complete separation of data points. 
+
+
+                                   Model Convergence Status
+                      Quasi-complete separation of data points detected.
+
+WARNING: The maximum likelihood estimate may not exist.
+WARNING: The LOGISTIC procedure continues in spite of the above warning. Results shown are
+         based on the last maximum likelihood iteration. Validity of the model fit is
+         questionable.
+WARNING: The validity of the model fit is questionable.
+
+                                     Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             323.165        218.990
+                            SC              327.051        234.534
+                            -2 Log L        321.165        210.990
+
+                     R-Square    0.2636    Max-rescaled R-Square    0.4467
+
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio       110.1752        3         <.0001
+                    Score                  111.6605        3         <.0001
+                    Wald                    50.0793        3         <.0001
+
+
+                                  Type 3 Analysis of Effects
+                                                  Wald
+                          Effect      DF    Chi-Square    Pr > ChiSq
+                          agecat       3       50.0793        <.0001
+
+                
+                             Analysis of Maximum Likelihood Estimates
+
+                                              Standard          Wald
+             Parameter      DF    Estimate       Error    Chi-Square    Pr > ChiSq
+             Intercept       1      0.0202      0.2010        0.0101        0.9199
+             agecat    2     1      2.4460      0.4012       37.1721        <.0001
+             agecat    3     1      4.2839      1.0266       17.4126        <.0001
+             agecat    4     1     14.8969       205.9        0.0052        0.9423
+
+WARNING: The validity of the model fit is questionable.
+
+Note that the point estimate of the odds ratio for AGECAT=4 is >999.999 and the 95% confidence interval is huge. This alerts us that there is a problem with AGECAT=4.
+
+                                    Odds Ratio Estimates
+                                           Point          95% Wald
+                       Effect           Estimate      Confidence Limits
+                       agecat 2 vs 1      11.542       5.258      25.339
+                       agecat 3 vs 1      72.520       9.696     542.384
+                       agecat 4 vs 1    >999.999      <0.001    >999.999
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     77.0    Somers' D    0.736
+                       Percent Discordant      3.4    Gamma        0.915
+                       Percent Tied           19.6    Tau-a        0.202
+                       Pairs                 17759    c            0.868
+
+Based on the information that we saw in the crosstabulation, we will create a new variable AGECAT3, with 3 age categories, collapsing category 3 and category 4.
+
+/*Recode Agecat into AGECAT3 with 3 categories*/
+data bcancer2;
+  set bcancer;
+  if age not=. then do;
+    if age < 50 then agecat3 = 1;
+    if age >=50 and age < 60 then agecat3 = 2;
+    if age >=60 then agecat3 = 3;
+  end;
+run;
+
+We now fit a new logistic regression, with AGECAT3 as a categorical predictor. Note in the output for this model, we do not have a problem with quasi-complete separation, but we do have a very large confidence interval for the odds ratio for AGECAT=3, owing to the fact that there was only one person who was not in menopause in this category.
+
+proc logistic data=bcancer2;
+  class agecat3(ref="1") / param = ref;
+  model menopause(event="1") =  agecat3/ rsquare;
+run;
+
+ 
+                        Logistic Regression with Recoded Age Categories                     
+                                      This Analysis Works
+
+                                   The LOGISTIC Procedure
+                                      Model Information
+
+                        Data Set                      WORK.BCANCER2
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         360
+
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+
+                                    1            1            301
+                                    2            0             59
+
+                             Probability modeled is menopause=1.
+
+NOTE: 10 observations were deleted due to missing values for the response or explanatory
+      variables.
+
+      
+                                   Class Level Information
+                                                        Design
+                                Class       Value     Variables
+                                agecat3     1          0      0
+                                            2          1      0
+                                            3          0      1
+
+                                   Model Convergence Status
+                        Convergence criterion (GCONV=1E-8) satisfied.
+
+                                     Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             323.165        218.329
+                            SC              327.051        229.987
+                            -2 Log L        321.165        212.329
+
+                     R-Square    0.2609    Max-rescaled R-Square    0.4420
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio       108.8365        2         <.0001
+                    Score                  111.6132        2         <.0001
+                    Wald                    55.3535        2         <.0001
+
+                                 Type 3 Analysis of Effects
+                                                   Wald
+                          Effect       DF    Chi-Square    Pr > ChiSq
+                          agecat3       2       55.3535        <.0001
+
+
+                           Analysis of Maximum Likelihood Estimates
+                                              Standard          Wald
+             Parameter      DF    Estimate       Error    Chi-Square    Pr > ChiSq
+             Intercept       1      0.0202      0.2010        0.0101        0.9199
+             agecat3   2     1      2.4460      0.4012       37.1721        <.0001
+             agecat3   3     1      4.9565      1.0234       23.4578        <.0001
+
+
+
+                                     Odds Ratio Estimates
+                                           Point          95% Wald
+                      Effect            Estimate      Confidence Limits
+                      agecat3 2 vs 1      11.542       5.258      25.339
+                      agecat3 3 vs 1     142.097      19.120    >999.999
+
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     76.6    Somers' D    0.732
+                       Percent Discordant      3.4    Gamma        0.915
+                       Percent Tied           20.0    Tau-a        0.201
+                       Pairs                 17759    c            0.866
+
+Logistic Regression Model with Several Predictors 
+
+We now fit a logistic regression model with several predictors, both continuous and categorical. Note especially the global test for the model, which has 6 degrees of freedom, due to the 6 parameters that are estimated for the predictors in the model. There are two parameters for EDCAT and one each for AGE, SMOKER, TOTINCOM, and NUMPREG1. The only predictor that is significant in this model is AGE (p<0.0001)..
+
+proc logistic data=bcancer;
+  class edcat(ref="1") / param = ref;
+  model menopause(event="1") = age edcat smoker totincom numpreg1 
+                    / rsquare;
+run;
+
+
+                          Logistic Regression with Several Predictors                      
+                                    The LOGISTIC Procedure
+                                      Model Information
+                        Data Set                      WORK.BCANCER
+                        Response Variable             menopause
+                        Number of Response Levels     2
+                        Model                         binary logit
+                        Optimization Technique        Fisher's scoring
+
+                            Number of Observations Read         370
+                            Number of Observations Used         313
+
+
+                                       Response Profile
+                              Ordered                       Total
+                                Value     menopause     Frequency
+                                    1            1            259
+                                    2            0             54
+                              Probability modeled is menopause=1.
+
+NOTE: 57 observations were deleted due to missing values for the response or explanatory
+      variables.
+
+                                    Class Level Information
+                                                       Design
+                                 Class     Value     Variables
+                                 edcat     1          0      0
+                                           2          1      0
+                                           3          0      1
+
+                                   Model Convergence Status
+                        Convergence criterion (GCONV=1E-8) satisfied.
+
+                                     Model Fit Statistics
+                                                         Intercept
+                                          Intercept            and
+                            Criterion          Only     Covariates
+                            AIC             289.876        191.510
+                            SC              293.622        217.734
+                            -2 Log L        287.876        177.510
+                     R-Square    0.2971    Max-rescaled R-Square    0.4941
+
+
+                            Testing Global Null Hypothesis: BETA=0
+                    Test                 Chi-Square       DF     Pr > ChiSq
+                    Likelihood Ratio       110.3657        6         <.0001
+                    Score                   73.1512        6         <.0001
+                    Wald                    44.6630        6         <.0001
+
+                                  Type 3 Analysis of Effects
+                                                   Wald
+                         Effect        DF    Chi-Square    Pr > ChiSq
+                         age            1       40.6094        <.0001
+                         edcat          2        2.3776        0.3046
+                         smoker         1        2.9092        0.0881
+                         totincom       1        0.3032        0.5819
+                         numpreg1       1        0.0025        0.9605
+
+
+                           Analysis of Maximum Likelihood Estimates
+                                              Standard          Wald
+             Parameter      DF    Estimate       Error    Chi-Square    Pr > ChiSq
+             Intercept       1    -10.8151      2.2132       23.8788        <.0001
+             age             1      0.2797      0.0439       40.6094        <.0001
+             edcat     2     1     -0.4356      0.5524        0.6219        0.4304
+             edcat     3     1     -0.8401      0.5636        2.2214        0.1361
+             smoker          1     -0.6543      0.3836        2.9092        0.0881
+             totincom        1     -0.0927      0.1683        0.3032        0.5819
+             numpreg1        1     0.00646      0.1305        0.0025        0.9605
+
+                                     Odds Ratio Estimates
+                                            Point          95% Wald
+                      Effect             Estimate      Confidence Limits
+                      age                   1.323       1.214       1.442
+                      edcat    2 vs 1       0.647       0.219       1.910
+                      edcat    3 vs 1       0.432       0.143       1.303
+                      smoker                0.520       0.245       1.102
+                      totincom              0.911       0.655       1.268
+                      numpreg1              1.006       0.779       1.300
+
+
+
+                 Association of Predicted Probabilities and Observed Responses
+                       Percent Concordant     90.0    Somers' D    0.802
+                       Percent Discordant      9.8    Gamma        0.804
+                       Percent Tied            0.2    Tau-a        0.230
+                       Pairs                 13986    c            0.901
+
+Logistic Regression Model Using Proc Genmod 
+
+Logistic regression models, along with several other types of models, can be fitted using Proc Genmod. You need to supply the distribution that the dependent variable has (in this case we use dist=bin), and you can also specify a link function. In this case we use the default link (for a binary distribution, the default link is logit), so we will be fitting the same model as in Proc Logistic. The type3 option in the model statement gives us the type3 test for each predictor in the model. However, unlike Proc Logistic, which gives Wald tests in the type3 output, we get Likelihood Ratio tests, which are preferable. 
+
+proc genmod data=bcancer descending;
+  class edcat(ref="1") / param = ref;
+  model menopause = age edcat smoker totincom numpreg1 
+                    / dist=bin type3;
+run;
+
+
+                             Logistic Regression Using Proc Genmod                                                                                   
+                                    The GENMOD Procedure
+                                      Model Information
+                              Data Set              WORK.BCANCER
+                              Distribution              Binomial
+                              Link Function                Logit
+                              Dependent Variable       menopause
+
+                            Number of Observations Read         370
+                            Number of Observations Used         313
+                            Number of Events                    259
+                            Number of Trials                    313
+                            Missing Values                       57
+
+                                    Class Level Information
+                                                       Design
+                                 Class     Value     Variables
+                                 edcat     1          0      0
+                                           2          1      0
+                                           3          0      1
+
+                                       Response Profile
+                               Ordered                     Total
+                                 Value    menopause    Frequency
+                                     1    1                  259
+                                     2    0                   54
+
+PROC GENMOD is modeling the probability that menopause='1'.
+
+                            Criteria For Assessing Goodness Of Fit
+                 Criterion                 DF           Value        Value/DF
+                 Deviance                 306        177.5102          0.5801
+                 Scaled Deviance          306        177.5102          0.5801
+                 Pearson Chi-Square       306        297.4367          0.9720
+                 Scaled Pearson X2        306        297.4367          0.9720
+                 Log Likelihood                      -88.7551
+
+          Algorithm converged.
+
+                                Analysis Of Parameter Estimates
+                                     Standard     Wald 95% Confidence       Chi-
+ Parameter         DF    Estimate       Error           Limits            Square    Pr > ChiSq
+ Intercept          1    -10.8151      2.2132    -15.1530     -6.4773      23.88        <.0001
+ age                1      0.2797      0.0439      0.1937      0.3658      40.61        <.0001
+ edcat        2     1     -0.4356      0.5524     -1.5182      0.6470       0.62        0.4304
+ edcat        3     1     -0.8401      0.5636     -1.9448      0.2647       2.22        0.1361
+ smoker             1     -0.6543      0.3836     -1.4062      0.0976       2.91        0.0881
+ totincom           1     -0.0927      0.1683     -0.4226      0.2372       0.30        0.5819
+ numpreg1           1      0.0065      0.1305     -0.2494      0.2623       0.00        0.9605
+ Scale              0      1.0000      0.0000      1.0000      1.0000
+
+NOTE: The scale parameter was held fixed.
+
+                              LR Statistics For Type 3 Analysis
+                                                   Chi-
+                         Source           DF     Square    Pr > ChiSq
+                         age               1      89.12        <.0001
+                         edcat             2       2.45        0.2932
+                         smoker            1       2.96        0.0852
+                         totincom          1       0.31        0.5794
+                         numpreg1          1       0.00        0.9605
+
+Compare these LR (Likelihood Ratio) statistics in the Type 3 Analysis with the Type 3 tests from Proc Logistic shown below. Those given below show more significant digits, and are in some cases quite different.
+
+                                  Type 3 Analysis of Effects
+                                                   Wald
+                         Effect        DF    Chi-Square    Pr > ChiSq
+                         age            1       40.6094        <.0001
+                         edcat          2        2.3776        0.3046
+                         smoker         1        2.9092        0.0881
+                         totincom       1        0.3032        0.5819
+                         numpreg1       1        0.0025        0.9605
+
+Estimating the Risk Ratio Using Proc Genmod 
+
+Because we can specify a large range of link functions using Proc Genmod, we have the opportunity to fit a model using the Log link with the binary distribution. When we exponentiate this estimate, we get an estimate of the Risk Ratio, rather than the Odds Ratio.  Here is the code for this example, using HIGHAGE as the predictor:
+
+proc genmod data=bcancer descending;
+  class highage(ref="2") / param = ref;
+  model menopause =  highage / dist=bin type3 link=log;
+  estimate "Effect of High Age" highage 1 / exp;
+run;
+
+
+
+
+
+
+
+Partial output from this model is shown below. Note that the Risk Ratio (1.90) matches the one we calculated for HIGHAGE in the Proc Freq output at the beginning of this handout:
+
+                                Criteria For Assessing Goodness Of Fit
+
+                   Criterion                     DF           Value        Value/DF
+                   Log Likelihood                         -111.0418
+                   Full Log Likelihood                    -111.0418
+                   AIC (smaller is better)                 226.0836
+                   AICC (smaller is better)                226.1172
+                   BIC (smaller is better)                 233.8558
+
+
+             Algorithm converged.
+
+
+                          Analysis Of Maximum Likelihood Parameter Estimates
+
+                                       Standard     Wald 95% Confidence          Wald
+   Parameter         DF    Estimate       Error           Limits           Chi-Square    Pr > ChiSq
+
+   Intercept          1     -0.6831      0.0995     -0.8781     -0.4881         47.14        <.0001
+   highage      1     1      0.6440      0.1003      0.4475      0.8405         41.26        <.0001
+   Scale              0      1.0000      0.0000      1.0000      1.0000
+
+NOTE: The scale parameter was held fixed.
+
+
+                                 LR Statistics For Type 3 Analysis
+
+                                                       Chi-
+                             Source           DF     Square    Pr > ChiSq
+                             highage           1      99.08        <.0001
+
+
+                                      Contrast Estimate Results
+                             Mean         Mean           L'Beta  Standard                L'Beta
+Label                    Estimate   Confidence Limits  Estimate     Error   Alpha   Confidence Limits
+Effect of High Age         1.9041    1.5644    2.3176    0.6440    0.1003    0.05    0.4475    0.8405
+Exp(Effect of High Age)                                  1.9041    0.1909    0.05    1.5644    2.3176
+
+                                      Contrast Estimate Results
+                                                       Chi-
+                            Label                    Square    Pr > ChiSq
+                            Effect of High Age        41.26        <.0001
+                            Exp(Effect of High Age) 
