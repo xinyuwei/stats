@@ -1,6 +1,6 @@
-Logistic Regression Using SAS
+Reference:  link  Logistic Regression Using SAS
 
-For this handout we will examine a dataset that is part of the data collected from “A study of preventive lifestyles and women’s health”  conducted by a group of students in  School of Public Health, at the University of Michigan during the1997 winter term. There are 370 women in this study aged 40 to 91 years.
+For this handout we will examine a dataset that is part of the data collected from ï¿½A study of preventive lifestyles and womenï¿½s healthï¿½  conducted by a group of students in  School of Public Health, at the University of Michigan during the1997 winter term. There are 370 women in this study aged 40 to 91 years.
 
 Description of variables:
 
@@ -24,7 +24,7 @@ Variable Name		Description				Column Location
 			2= Grade school
 			3= Some high school 
 			4= High school graduate/ Diploma equivalent
-			5= Some college education/ Associate’s degree 
+			5= Some college education/ Associateï¿½s degree 
 			6= College graduate   
 			7= Some graduate school 
 			8= Graduate school or professional degree
@@ -35,7 +35,7 @@ Variable Name		Description				Column Location
 			3= $25,000 to 39,999
 			4= $40.000 to 54,999
 			5= More than $55,000
-			8= Don’t know       
+			8= Donï¿½t know       
  			9= Missing
 
  	SMOKER		1= Yes, 2= No, 9= Missing		     24
